@@ -1,0 +1,89 @@
+pipeline {
+
+  agent any
+  stages {
+    stage('env') {
+      steps {
+        sh 'pwd && printenv && go version && govendor --version'
+        sh 'mkdir -p $HOME/$BRANCH_NAME'
+        sh 'mkdir -p $HOME/$BRANCH_NAME/bin'
+        sh 'mkdir -p $HOME/$BRANCH_NAME/src'
+        sh 'rm -rf $HOME/$BRANCH_NAME/src/sicc.serivce.board'
+        sh 'cp -r . $HOME/$BRANCH_NAME/src/sicc.serivce.board'
+      }
+    }
+
+    stage('build') {
+      steps {
+        withEnv(["GOPATH=/var/lib/jenkins/$BRANCH_NAME"]) {
+          ws(dir: "$BRANCH_NAME/src/sicc.serivce.board") {
+            sh 'go get'
+            sh 'go build ./main.go'
+          }
+
+          // for unit-test
+          ws(dir: "$BRANCH_NAME/src/sicc.serivce.board") {
+            //s sh 'go get github.com/stretchr/testify/assert'
+          }
+        }
+      }
+    }
+
+    stage('unit-test') {
+      parallel {
+
+        stage('dev') {
+          when { branch 'develop-igseo' }
+          steps {
+            withEnv(["GOPATH=/var/lib/jenkins/$BRANCH_NAME"]) {
+              ws(dir: "$BRANCH_NAME/src/sicc.serivce.board") {
+                //s sh 'go test -coverprofile=$BRANCH_NAME.out ./... || true'
+              }
+            }
+          }
+          post {
+            always {
+              withEnv(["GOPATH=/var/lib/jenkins/$BRANCH_NAME"]) {
+                ws(dir: "$BRANCH_NAME/src/sicc.serivce.board") {
+                  //s sh 'go tool cover -func=$BRANCH_NAME.out'
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    stage('deploy') {
+      parallel {
+
+        stage('dev') {
+          when { branch 'develop-igseo' }
+          steps {
+            withEnv(["GOPATH=/var/lib/jenkins/$BRANCH_NAME"]) {
+              ws(dir: "$BRANCH_NAME/src/sicc.serivce.board") {
+                sh 'go install'
+                sh 'echo GOPATH && echo $GOROOT && echo 111'
+              }
+
+              echo '================[START] DEPLOY TO 127.0.0.1 ================'
+              //sh 'ssh -o "StrictHostKeyChecking no" maas@127.0.0.1 "mkdir -p /deploy/dev/sicc.serivce.board/$GIT_COMMIT"'
+              //sh 'scp -o "StrictHostKeyChecking no" -r $HOME/$BRANCH_NAME/src/sicc.serivce.board/font maas@127.0.0.1:/deploy/dev/sicc.serivce.board/$GIT_COMMIT/.'
+              //sh 'scp -o "StrictHostKeyChecking no" -r $HOME/$BRANCH_NAME/src/sicc.serivce.board/templete maas@127.0.0.1:/deploy/dev/sicc.serivce.board/$GIT_COMMIT/.'
+              //sh 'scp -o "StrictHostKeyChecking no" -r $HOME/$BRANCH_NAME/src/sicc.serivce.board/policy maas@127.0.0.1:/deploy/dev/sicc.serivce.board/$GIT_COMMIT/.'
+              //sh 'scp -o "StrictHostKeyChecking no" $HOME/$BRANCH_NAME/bin/sicc.serivce.board maas@127.0.0.1:/deploy/dev/sicc.serivce.board/$GIT_COMMIT/.'
+              //sh 'scp -o "StrictHostKeyChecking no" $HOME/$BRANCH_NAME/src/sicc.serivce.board/*.toml maas@127.0.0.1:/deploy/dev/sicc.serivce.board/$GIT_COMMIT/.'
+              //sh 'ssh -o "StrictHostKeyChecking no" maas@127.0.0.1 "sudo systemctl stop maas-fms && rm -rf ~/maas/fms && mkdir -p ~/maas/fms && cp -r /deploy/dev/sicc.serivce.board/$GIT_COMMIT/* ~/maas/fms && sudo systemctl start maas-fms "'
+              echo '================[END] DEPLOY TO 127.0.0.1 ================'
+            }
+          }
+        }
+      }
+    }
+  }
+
+  environment {
+    GOROOT = '/usr/local/go'
+    PATH = '/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/usr/local/go/bin'
+  }
+}
